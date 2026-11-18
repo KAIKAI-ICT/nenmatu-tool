@@ -565,7 +565,6 @@
 
         <div id="tab-hoken" role="tabpanel" aria-labelledby="tab-button-hoken" tabindex="0" class="tab-content hidden bg-white p-6 rounded-lg shadow">
           <p class="rounded border border-blue-200 bg-blue-50 p-3 mb-4 text-sm text-gray-700">保険料などの金額は、基本情報からは入力されません。控除対象となる生命保険料・地震保険料・社会保険料・小規模企業共済等掛金がある場合は、この画面の淡い黄色の欄へ入力・選択してください。基本情報の親族情報は、23歳未満の扶養親族がいる場合の生命保険料控除の特例判定に使います。金額欄は、該当がなければ0のままにしてください。</p>
-          <div id="life-under23-check-note" class="hidden rounded border-4 border-amber-400 bg-amber-50 p-4 mb-4 text-sm text-amber-950" role="status" aria-live="polite"></div>
           <p id="yearend-excluded-hoken" class="hidden rounded border border-red-300 bg-red-50 p-3 mb-4 text-sm font-semibold text-red-800">年末調整の対象外：この勤務先で年末調整する給与が2,000万円を超えています。この画面の計算結果は参考値です。年末調整用の控除額として転記せず、確定申告の手続で確認してください。</p>
           <div class="border-2 border-black p-2">
             <h2 class="text-xl font-bold text-center mb-4">
@@ -578,7 +577,6 @@
             <div class="grid grid-cols-2 gap-4">
               <fieldset class="border border-gray-400 p-4 rounded-lg col-span-2">
                 <legend class="text-lg font-semibold px-2">生命保険料控除</legend><p id="life-child-note" class="text-sm text-blue-700 mb-2"></p>
-                <div id="life-under23-person" class="hidden rounded border border-blue-200 bg-blue-50 p-2 mb-2 text-sm whitespace-pre-line"></div>
                 <div id="life-insurance-container" class="space-y-2">
                   </div>
                 <button onclick="addLifeInsurance()" class="mt-2 text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">
@@ -656,6 +654,8 @@
                     <span class="font-bold text-lg">生命保険料控除 合計額 (イ+ロ+ハ): </span>
                     <input type="text" id="life-insurance-total-ded" class="calc-field w-32 text-lg inline-block" readonly />
                   </div>
+                  <div id="life-under23-check-note" class="hidden rounded border-4 border-amber-400 bg-amber-50 p-4 mt-3 text-sm text-amber-950" role="status" aria-live="polite"></div>
+                  <div id="life-under23-person" class="hidden rounded border border-blue-200 bg-blue-50 p-2 mt-2 text-sm whitespace-pre-line"></div>
                 </div>
               </fieldset>
 
@@ -1080,6 +1080,16 @@
       ['⑤','②＋③（最高60,000円）',i.specialLifeApplied?money(i.generalCombinedSpecial):'使用しません','general-5'],
       ['㋑',i.specialLifeApplied?'⑤の額を転記':'③と④の大きい額（新契約なしは③）',money(i.general),'general-i',true]]);
     detail.appendChild(node('p',i.specialLifeApplied?'☑ 特例：②・⑤を使用。①・④は記入しません。':'☑ 通常：②・⑤は記入しません。新契約がある場合は①・④を使用します。','print-note'));
+    if(i.specialLifeApplied) {
+      const child=r.dependents.find(d=>d.isFuyo&&d.age<23);
+      table(block(detail,'☆ 年齢23歳未満の扶養親族（いずれか1人）'),['氏名／続柄','生年月日','所得見積額','別居の場合の住所'],[[child.name+'／'+child.relation,child.birthdate,money(child.income),child.address||'未入力']]);
+      detail.appendChild(node('p','【記入漏れ注意】上記の方を、正式な保険料控除申告書の「☆ 年齢23歳未満の扶養親族」欄にも記入してください。フリガナ・個人番号等も正式様式で確認してください。','print-warning'));
+    } else if(r.under23Candidates.length && i.life['new-general']>0) {
+      const names=r.under23Candidates.map(d=>d.name||'氏名未入力').join('、');
+      detail.appendChild(node('p',`【要確認】23歳未満の家族（${names}）が登録されていますが、特例は適用されていません。基本情報の生計要件・生年月日・所得見積額（所得62万円以下）を確認し、要件に該当する場合は基本情報を修正してください。該当しない場合、☆欄は記入不要です。`,'print-warning'));
+    } else if(i.life['new-general']>0) {
+      detail.appendChild(node('p','【記入確認】23歳未満の扶養親族がいる場合、一般生命保険料控除の特例と申告書の☆欄が該当することがあります。基本情報の親族情報を確認してください。該当者がいなければ☆欄は記入不要です。','print-warning'));
+    }
     insuranceTable(detail,'介護医療保険料　C → ㋺',[
       ['C','支払保険料等の金額の合計額',money(i.life['new-medical']),'medical-C'],
       ['㋺','Cを計算式Ⅰで計算（最高40,000円）',money(i.medical),'medical-ro',true]]);
@@ -1091,16 +1101,6 @@
       ['⑦','Eを計算式Ⅲ（旧契約）で計算',money(i.pensionOld),'pension-7'],
       ['⑧','⑥＋⑦（最高40,000円）',money(i.pensionCombined),'pension-8'],
       ['㋩','⑦と⑧のいずれか大きい金額',money(i.pension),'pension-ha',true]]);
-    if(i.specialLifeApplied) {
-      const child=r.dependents.find(d=>d.isFuyo&&d.age<23);
-      table(block(summary,'☆ 年齢23歳未満の扶養親族（いずれか1人）'),['氏名／続柄','生年月日','所得見積額','別居の場合の住所'],[[child.name+'／'+child.relation,child.birthdate,money(child.income),child.address||'未入力']]);
-      summary.appendChild(node('p','【記入漏れ注意】上記の方を、正式な保険料控除申告書の「☆ 年齢23歳未満の扶養親族」欄にも記入してください。フリガナ・個人番号等も正式様式で確認してください。','print-warning'));
-    } else if(r.under23Candidates.length && i.life['new-general']>0) {
-      const names=r.under23Candidates.map(d=>d.name||'氏名未入力').join('、');
-      summary.appendChild(node('p',`【要確認】23歳未満の家族（${names}）が登録されていますが、特例は適用されていません。基本情報の生計要件・生年月日・所得見積額（所得62万円以下）を確認し、要件に該当する場合は基本情報を修正してください。該当しない場合、☆欄は記入不要です。`,'print-warning'));
-    } else if(i.life['new-general']>0) {
-      summary.appendChild(node('p','【記入確認】23歳未満の扶養親族がいる場合、一般生命保険料控除の特例と申告書の☆欄が該当することがあります。基本情報の親族情報を確認してください。該当者がいなければ☆欄は記入不要です。','print-warning'));
-    }
     insuranceTable(summary,'生命保険料控除額',[
       ['合計','㋑＋㋺＋㋩（最高120,000円）',money(i.total),'life-total',true]]);
     table(block(summary,'地震保険料の明細'),['保険会社名','区分','支払保険料'],insuranceRows(input.earthquakeInsurance));
